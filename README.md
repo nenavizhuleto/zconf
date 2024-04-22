@@ -1,5 +1,26 @@
 # ZConf
 
+## Usage
+
+
+### Installation
+
+```sh
+go get github.com/nenavizhuleto/zconf
+```
+
+### In code
+
+```go
+import "github.com/nenavizhuleto/zconf"
+
+func main() {
+	zc, _ := zconf.New([]string{"localhost:2182"})
+
+    zc.WatchNode("/")
+}
+```
+
 ## Subscribe for changes to ZooKeeper Nodes
 
 ```go
