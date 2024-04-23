@@ -75,7 +75,7 @@ func (c *Config) WatchPath(path string) error {
 	}
 
 	for _, child := range children {
-		go c.WatchNode(filepath.Join(path, child))
+		go c.WatchPath(filepath.Join(path, child))
 	}
 
 	for {
