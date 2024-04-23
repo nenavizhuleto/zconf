@@ -1,8 +1,10 @@
 package zconf
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/go-zookeeper/zk"
@@ -98,4 +100,36 @@ func (c *Config) WatchPath(path string) error {
 			}
 		}
 	}
+}
+
+func (c *Config) LastPathSegment(path string) string {
+	paths := strings.Split(path, "/")
+	return paths[len(paths)-1]
+}
+
+func (c *Config) Dump(path string, value any) error {
+
+	exists, stat, err := c.zcon.Exists(path)
+	if err != nil {
+		return err
+	}
+
+	data, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+
+	if exists {
+		_, err := c.zcon.Set(path, data, stat.Version)
+		if err != nil {
+			return err
+		}
+	} else {
+		_, err := c.zcon.Create(path, data, zk.FlagTTL, zk.WorldACL(zk.PermAll))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
