@@ -21,8 +21,9 @@ type Config struct {
 	zcon *zk.Conn
 
 	// callbacks
-	data_cb NodeDataCallback
-	node_cb NodeCallback
+	data_cb   NodeDataCallback
+	node_cb   NodeCallback
+	delete_cb NodeCallback
 }
 
 func New(servers []string) (*Config, error) {
@@ -44,6 +45,10 @@ func (c *Config) OnNodeChanged(callback NodeCallback) {
 	c.node_cb = callback
 }
 
+func (c *Config) OnNodeDeleted(callback NodeCallback) {
+	c.delete_cb = callback
+}
+
 func (c *Config) WatchNode(nodepath string) error {
 	for {
 		body, _, w, err := c.zcon.GetW(nodepath)
@@ -62,6 +67,7 @@ func (c *Config) WatchNode(nodepath string) error {
 		event := <-w
 
 		if event.Type == zk.EventNodeDeleted {
+			c.delete_cb(nodepath)
 			return nil
 		}
 	}
