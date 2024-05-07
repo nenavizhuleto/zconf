@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/go-zookeeper/zk"
@@ -14,16 +13,15 @@ var (
 	DefaultSessionTimeout = time.Second
 )
 
-type NodeDataCallback func(path string, data []byte)
-type NodeCallback func(path string)
+type NodeCallback func(path string, data []byte)
 
 type Config struct {
 	zcon *zk.Conn
 
+	binding map[string]NodeCallback
 	// callbacks
-	data_cb   NodeDataCallback
-	node_cb   NodeCallback
-	delete_cb NodeCallback
+	changed NodeCallback
+	deleted NodeCallback
 }
 
 func New(servers []string) (*Config, error) {
@@ -33,20 +31,17 @@ func New(servers []string) (*Config, error) {
 	}
 
 	return &Config{
-		zcon: connection,
+		zcon:    connection,
+		binding: make(map[string]NodeCallback),
 	}, nil
 }
 
-func (c *Config) OnNodeDataChanged(callback NodeDataCallback) {
-	c.data_cb = callback
-}
-
 func (c *Config) OnNodeChanged(callback NodeCallback) {
-	c.node_cb = callback
+	c.changed = callback
 }
 
 func (c *Config) OnNodeDeleted(callback NodeCallback) {
-	c.delete_cb = callback
+	c.deleted = callback
 }
 
 func (c *Config) WatchNode(nodepath string) error {
@@ -56,21 +51,25 @@ func (c *Config) WatchNode(nodepath string) error {
 			return err
 		}
 
-		if c.node_cb != nil {
-			c.node_cb(nodepath)
+		if c.changed != nil {
+			c.changed(nodepath, body)
 		}
 
-		if c.data_cb != nil {
-			c.data_cb(nodepath, body)
+		if callback, ok := c.binding[nodepath]; ok {
+			callback(nodepath, body)
 		}
 
 		event := <-w
 
 		if event.Type == zk.EventNodeDeleted {
-			c.delete_cb(nodepath)
+			c.deleted(nodepath, body)
 			return nil
 		}
 	}
+}
+
+func (c *Config) Bind(path string, callback NodeCallback) {
+	c.binding[path] = callback
 }
 
 func (c *Config) WatchPath(path string) error {
@@ -106,11 +105,6 @@ func (c *Config) WatchPath(path string) error {
 			}
 		}
 	}
-}
-
-func (c *Config) LastPathSegment(path string) string {
-	paths := strings.Split(path, "/")
-	return paths[len(paths)-1]
 }
 
 func (c *Config) Dump(path string, value any) error {
