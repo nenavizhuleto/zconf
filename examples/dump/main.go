@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -28,11 +29,7 @@ func main() {
 		return
 	}
 
-	c.OnNodeChanged(func(path string) {
-		fmt.Println("path", path, "changed")
-	})
-
-	c.OnNodeDataChanged(func(path string, data []byte) {
+	c.OnNodeChanged(func(path string, data []byte) {
 		fmt.Println("path", path, "data", string(data))
 	})
 
@@ -44,5 +41,5 @@ func main() {
 
 	}
 
-	c.WatchPath(*path)
+	c.WatchPath(context.TODO(), *path)
 }

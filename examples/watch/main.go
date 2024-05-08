@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 
@@ -26,5 +27,5 @@ func main() {
 		fmt.Println("path", path, "data", string(data))
 	})
 
-	c.WatchPath(*path)
+	c.WatchPath(context.TODO(), *path)
 }

@@ -1,6 +1,7 @@
 package zconf
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 	"slices"
@@ -58,7 +59,7 @@ func (c *Config) Get(nodepath string) (node Node, err error) {
 	return
 }
 
-func (c *Config) WatchNode(nodepath string) error {
+func (c *Config) WatchNode(ctx context.Context, nodepath string) error {
 	for {
 		body, _, w, err := c.zcon.GetW(nodepath)
 		if err != nil {
@@ -69,18 +70,21 @@ func (c *Config) WatchNode(nodepath string) error {
 			c.changed(nodepath, body)
 		}
 
-		event := <-w
-
-		if event.Type == zk.EventNodeDeleted {
-			c.deleted(nodepath, body)
-			return nil
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case event := <-w:
+			if event.Type == zk.EventNodeDeleted {
+				c.deleted(nodepath, body)
+				return nil
+			}
 		}
 	}
 }
 
-func (c *Config) WatchPath(path string) error {
+func (c *Config) WatchPath(ctx context.Context, path string) error {
 
-	go c.WatchNode(path)
+	go c.WatchNode(ctx, path)
 
 	children, _, w, err := c.zcon.ChildrenW(path)
 	if err != nil {
@@ -88,11 +92,14 @@ func (c *Config) WatchPath(path string) error {
 	}
 
 	for _, child := range children {
-		go c.WatchPath(filepath.Join(path, child))
+		go c.WatchPath(ctx, filepath.Join(path, child))
 	}
 
 	for {
-		for event := range w {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case event := <-w:
 			if event.Type == zk.EventNodeChildrenChanged {
 				new_children, _, err := c.zcon.Children(path)
 				if err != nil {
@@ -104,7 +111,7 @@ func (c *Config) WatchPath(path string) error {
 						continue
 					}
 
-					go c.WatchNode(filepath.Join(path, child))
+					go c.WatchNode(ctx, filepath.Join(path, child))
 				}
 
 				children = new_children
