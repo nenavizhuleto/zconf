@@ -18,7 +18,6 @@ type NodeCallback func(path string, data []byte)
 type Config struct {
 	zcon *zk.Conn
 
-	binding map[string]NodeCallback
 	// callbacks
 	changed NodeCallback
 	deleted NodeCallback
@@ -31,8 +30,7 @@ func New(servers []string) (*Config, error) {
 	}
 
 	return &Config{
-		zcon:    connection,
-		binding: make(map[string]NodeCallback),
+		zcon: connection,
 	}, nil
 }
 
@@ -96,10 +94,6 @@ func (c *Config) WatchNode(nodepath string) error {
 			c.changed(nodepath, body)
 		}
 
-		if callback, ok := c.binding[nodepath]; ok {
-			callback(nodepath, body)
-		}
-
 		event := <-w
 
 		if event.Type == zk.EventNodeDeleted {
@@ -107,10 +101,6 @@ func (c *Config) WatchNode(nodepath string) error {
 			return nil
 		}
 	}
-}
-
-func (c *Config) Bind(path string, callback NodeCallback) {
-	c.binding[path] = callback
 }
 
 func (c *Config) WatchPath(path string) error {
