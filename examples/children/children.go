@@ -15,16 +15,19 @@ var (
 func main() {
 	flag.Parse()
 
-	c, err := zconf.New([]string{*server})
+	zc, err := zconf.New([]string{*server})
 	if err != nil {
-		flag.Usage()
-		fmt.Println(err)
-		return
+		panic(err)
 	}
 
-	c.OnNodeChanged(func(path string, data []byte) {
-		fmt.Println("path", path, "data", string(data))
-	})
+	node, err := zc.Get(*path)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(node.Path)
 
-	c.WatchPath(*path)
+	children, err := node.Children()
+	for _, child := range children {
+		fmt.Println("child: ", child.Path)
+	}
 }
