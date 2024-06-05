@@ -43,3 +43,7 @@ func (n *Node) OnChange(callback func(data []byte)) {
 func (n *Node) OnDelete(callback func(data []byte)) {
 	n.cbs.deleted = func(_ string, data []byte) { callback(data) }
 }
+
+func (n *Node) OnChildren(callback func(children []string, new []string)) {
+	n.cbs.children = func(_ string, children, new []string) { callback(children, new) }
+}

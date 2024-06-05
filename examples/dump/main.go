@@ -33,7 +33,7 @@ func main() {
 		fmt.Println("path", path, "data", string(data))
 	})
 
-	if err := c.Dump("/test", MyConfig{
+	if err := c.Put("/test", MyConfig{
 		Port: 4123,
 		Test: "zconf testing 2",
 	}); err != nil {
