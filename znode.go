@@ -1,12 +1,17 @@
 package zconf
 
-import "path/filepath"
+import (
+	"context"
+	"path/filepath"
+)
 
 type Node struct {
 	conf *Config
 
 	Path string
 	Data []byte
+
+	cbs callbacks
 }
 
 func (n *Node) Children() (nodes []Node, err error) {
@@ -25,4 +30,16 @@ func (n *Node) Children() (nodes []Node, err error) {
 	}
 
 	return
+}
+
+func (n *Node) Watch(ctx context.Context) error {
+	return n.conf.watchNode(ctx, n.Path, n.cbs)
+}
+
+func (n *Node) OnChange(callback func(data []byte)) {
+	n.cbs.changed = func(_ string, data []byte) { callback(data) }
+}
+
+func (n *Node) OnDelete(callback func(data []byte)) {
+	n.cbs.deleted = func(_ string, data []byte) { callback(data) }
 }

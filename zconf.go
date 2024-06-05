@@ -16,12 +16,15 @@ var (
 
 type NodeCallback func(path string, data []byte)
 
+type callbacks struct {
+	changed NodeCallback
+	deleted NodeCallback
+}
+
 type Config struct {
 	zcon *zk.Conn
 
-	// callbacks
-	changed NodeCallback
-	deleted NodeCallback
+	cbs callbacks
 }
 
 func New(servers []string) (*Config, error) {
@@ -36,11 +39,11 @@ func New(servers []string) (*Config, error) {
 }
 
 func (c *Config) OnNodeChanged(callback NodeCallback) {
-	c.changed = callback
+	c.cbs.changed = callback
 }
 
 func (c *Config) OnNodeDeleted(callback NodeCallback) {
-	c.deleted = callback
+	c.cbs.deleted = callback
 }
 
 func (c *Config) Get(nodepath string) (node Node, err error) {
@@ -59,15 +62,15 @@ func (c *Config) Get(nodepath string) (node Node, err error) {
 	return
 }
 
-func (c *Config) WatchNode(ctx context.Context, nodepath string) error {
+func (c *Config) watchNode(ctx context.Context, path string, cbs callbacks) error {
 	for {
-		body, _, w, err := c.zcon.GetW(nodepath)
+		body, _, w, err := c.zcon.GetW(path)
 		if err != nil {
 			return err
 		}
 
-		if c.changed != nil {
-			c.changed(nodepath, body)
+		if cbs.changed != nil {
+			cbs.changed(path, body)
 		}
 
 		select {
@@ -75,11 +78,17 @@ func (c *Config) WatchNode(ctx context.Context, nodepath string) error {
 			return ctx.Err()
 		case event := <-w:
 			if event.Type == zk.EventNodeDeleted {
-				c.deleted(nodepath, body)
+				if cbs.deleted != nil {
+					cbs.deleted(path, body)
+				}
 				return nil
 			}
 		}
 	}
+}
+
+func (c *Config) WatchNode(ctx context.Context, path string) error {
+	return c.watchNode(ctx, path, c.cbs)
 }
 
 func (c *Config) WatchPath(ctx context.Context, path string) error {
