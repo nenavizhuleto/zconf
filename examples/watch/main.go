@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 
 	"github.com/nenavizhuleto/zconf"
 )
@@ -27,5 +28,11 @@ func main() {
 		fmt.Println("path", path, "data", string(data))
 	})
 
-	c.WatchPath(context.TODO(), *path)
+	c.OnNodeError(func(path string, err error) {
+		fmt.Println("path", path, "err", err)
+	})
+
+	if err := c.WatchPath(context.TODO(), *path); err != nil {
+		log.Fatalln(err)
+	}
 }

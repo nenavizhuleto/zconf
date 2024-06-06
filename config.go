@@ -31,81 +31,6 @@ func New(servers []string) (*Config, error) {
 	}, nil
 }
 
-func (c *Config) OnNodeChanged(callback NodeCallback) {
-	c.cbs.changed = callback
-}
-
-func (c *Config) OnNodeDeleted(callback NodeCallback) {
-	c.cbs.deleted = callback
-}
-
-func (c *Config) Get(path string) (node Node, err error) {
-	data, _, err := c.zcon.Get(path)
-	if err != nil {
-		return
-	}
-
-	node = Node{
-		conf: c,
-
-		Path: path,
-		Data: data,
-		cbs:  c.cbs,
-	}
-
-	return
-}
-
-func (c *Config) watchNode(ctx context.Context, path string, cbs callbacks) error {
-	var children []string
-	for {
-		body, _, w, err := c.zcon.GetW(path)
-		if err != nil {
-			cbs.Error(path, err)
-			return err
-		}
-
-		if cbs.children != nil {
-			children, _, err = c.zcon.Children(path)
-			if err != nil {
-				cbs.Error(path, err)
-				return err
-			}
-		}
-
-		cbs.Changed(path, body)
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case event := <-w:
-			switch event.Type {
-			case zk.EventNodeDeleted:
-				cbs.Deleted(path, body)
-			case zk.EventNodeChildrenChanged:
-				if cbs.children != nil {
-					newChildren, _, err := c.zcon.Children(path)
-					if err != nil {
-						cbs.Error(path, err)
-						return err
-					}
-
-					var onlyNewChildren []string
-					for _, child := range newChildren {
-						if slices.Contains(children, child) {
-							continue
-						}
-
-						onlyNewChildren = append(onlyNewChildren, child)
-					}
-
-					cbs.Children(path, newChildren, onlyNewChildren)
-				}
-			}
-		}
-	}
-}
-
 func (c *Config) WatchNode(ctx context.Context, path string) error {
 	return c.watchNode(ctx, path, c.cbs)
 }
@@ -164,4 +89,99 @@ func (c *Config) Dump(path string, value any) error {
 	}
 
 	return nil
+}
+
+func (c *Config) OnNodeChanged(callback NodeCallback) {
+	c.cbs.changed = callback
+}
+
+func (c *Config) OnNodeDeleted(callback NodeCallback) {
+	c.cbs.deleted = callback
+}
+
+func (c *Config) OnNodeError(callback NodeErrorCallback) {
+	c.cbs.error = callback
+}
+
+func (c *Config) Get(path string) (node Node, err error) {
+	data, _, err := c.zcon.Get(path)
+	if err != nil {
+		return
+	}
+
+	node = Node{
+		conf: c,
+
+		Path: path,
+		Data: data,
+		cbs:  c.cbs,
+	}
+
+	return
+}
+
+func (c *Config) nodeChildrenListener(ctx context.Context, path string, cbs callbacks) error {
+	for {
+		children, _, cw, err := c.zcon.ChildrenW(path)
+		if err != nil {
+			cbs.Error(path, err)
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case event := <-cw:
+			switch event.Type {
+			case zk.EventNodeChildrenChanged:
+				newChildren, _, err := c.zcon.Children(path)
+				if err != nil {
+					cbs.Error(path, err)
+					return err
+				}
+
+				var onlyNewChildren []string
+				for _, child := range newChildren {
+					if slices.Contains(children, child) {
+						continue
+					}
+
+					onlyNewChildren = append(onlyNewChildren, child)
+				}
+
+				children = newChildren
+
+				cbs.Children(path, newChildren, onlyNewChildren)
+			}
+		}
+	}
+}
+
+func (c *Config) nodeBodyListener(ctx context.Context, path string, cbs callbacks) error {
+	for {
+		body, _, w, err := c.zcon.GetW(path)
+		if err != nil {
+			cbs.Error(path, err)
+			return err
+		}
+
+		cbs.Changed(path, body)
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case event := <-w:
+			switch event.Type {
+			case zk.EventNodeDeleted:
+				cbs.Deleted(path, body)
+			}
+		}
+	}
+}
+
+func (c *Config) watchNode(ctx context.Context, path string, cbs callbacks) error {
+	go c.nodeChildrenListener(ctx, path, cbs)
+	go c.nodeBodyListener(ctx, path, cbs)
+	<-ctx.Done()
+	return ctx.Err()
 }
